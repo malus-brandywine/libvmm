@@ -132,6 +132,7 @@ print_tcb_regs(seL4_UserContext *ctx) {
 static void
 print_vcpu_regs(uint64_t vcpu_id) {
     printf("VMM|INFO: VCPU registers: \n");
+#ifdef CONFIG_ARCH_AARCH64
     /* VM control registers EL1 */
     printf("    SCTLR: 0x%lx\n", sel4cp_arm_vcpu_read_reg(vcpu_id, seL4_VCPUReg_SCTLR));
     printf("    TTBR0: 0x%lx\n", sel4cp_arm_vcpu_read_reg(vcpu_id, seL4_VCPUReg_TTBR0));
@@ -171,6 +172,7 @@ print_vcpu_regs(uint64_t vcpu_id) {
     printf("    CNTV_CVAL: 0x%lx\n", sel4cp_arm_vcpu_read_reg(vcpu_id, seL4_VCPUReg_CNTV_CVAL));
     printf("    CNTVOFF: 0x%lx\n", sel4cp_arm_vcpu_read_reg(vcpu_id, seL4_VCPUReg_CNTVOFF));
     printf("    CNTKCTL_EL1: 0x%lx\n", sel4cp_arm_vcpu_read_reg(vcpu_id, seL4_VCPUReg_CNTKCTL_EL1));
+#endif
 }
 
 static void *memcpy(void *restrict dest, const void *restrict src, size_t n)

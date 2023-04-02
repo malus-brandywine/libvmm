@@ -36,7 +36,7 @@ LD := $(TOOLCHAIN)-ld
 AS := $(TOOLCHAIN)-as
 SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 
-ARCH := aarch64
+# ARCH := aarch64
 
 # ifeq ($(SEL4CP_BOARD),qemu_riscv_virt)
 # 	TOOLCHAIN = riscv64-unknown-elf
@@ -53,7 +53,9 @@ OPENSBI := opensbi
 
 CPU := cortex-a53
 
-VMM_OBJS := vmm.o printf.o psci.o smc.o fault.o util.o vgic.o global_data.o
+VMM_OBJS := vmm.o printf.o util.o global_data.o
+
+AARCH64_OBJS := psci.o smc.o fault.o vgic.o
 
 # @ivanv: hack...
 # This step should be done based on the DTB
@@ -94,10 +96,17 @@ LIBS := -lsel4cp -Tsel4cp.ld
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
-PAYLOAD_FILE = $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
+OPENSBI_PAYLOAD = $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
+
+ifeq ($(ARCH),aarch64)
+	FINAL_IMAGE = $(IMAGE_FILE)
+	VMM_OBJS += $(AARCH64_OBJS)
+else
+	FINAL_IMAGE = $(OPENSBI_PAYLOAD)
+endif
 
 # @ivanv: incremental building with the IMAGE_DIR set does not work.
-all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(IMAGE_FILE) $(KERNEL_IMAGE) $(INITRD_IMAGE)
+all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(IMAGE_FILE) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(FINAL_IMAGE)
 
 directories:
 	$(shell mkdir -p $(BUILD_DIR))
@@ -138,6 +147,6 @@ $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) $(SYSTEM_DESCRIPTION)
 	$(SEL4CP_TOOL) $(SYSTEM_DESCRIPTION) --search-path $(BUILD_DIR) $(IMAGE_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
-# $(PAYLOAD_FILE): $(IMAGE_FILE)
-# 	make -C $(OPENSBI) -j12 PLATFORM=generic CROSS_COMPILE=riscv64-unknown-elf- FW_PAYLOAD_PATH=$(IMAGE_FILE) \
-# 	PLATFORM_RISCV_XLEN=64 PLATFORM_RISCV_ISA=rv64imac PLATFORM_RISCV_ABI=lp64 O=$(BUILD_DIR)
+$(OPENSBI_PAYLOAD): $(IMAGE_FILE)
+	make -C $(OPENSBI) -j12 PLATFORM=generic CROSS_COMPILE=riscv64-unknown-elf- FW_PAYLOAD_PATH=$(IMAGE_FILE) FW_PAYLOAD_OFFSET=0x400000 \
+	PLATFORM_RISCV_XLEN=64 PLATFORM_RISCV_ISA=rv64imac PLATFORM_RISCV_ABI=lp64 O=$(BUILD_DIR)

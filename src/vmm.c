@@ -7,12 +7,17 @@
 #include <stddef.h>
 #include <sel4cp.h>
 #include "util/util.h"
-#include "vgic/vgic.h"
-#include "smc.h"
-#include "fault.h"
-#include "hsr.h"
-#include "vmm.h"
+#if defined(CONFIG_ARCH_AARCH64)
 #include "arch/aarch64/linux.h"
+#include "vgic/vgic.h"
+#include "fault.h"
+#include "smc.h"
+#include "hsr.h"
+#endif
+#if defined(CONFIG_ARCH_RISCV)
+#include "arch/riscv/linux.h"
+#endif
+#include "vmm.h"
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -30,12 +35,14 @@ uintptr_t guest_ram_vaddr;
 #define SYSCALL_PA_TO_IPA 65
 #define SYSCALL_NOP 67
 
+// @ivanv: we already have an HSR header, put this shit there
 #define HSR_SMC_64_EXCEPTION        (0x17)
 #define HSR_MAX_EXCEPTION           (0x3f)
 #define HSR_EXCEPTION_CLASS_SHIFT   (26)
 #define HSR_EXCEPTION_CLASS_MASK    (HSR_MAX_EXCEPTION << HSR_EXCEPTION_CLASS_SHIFT)
 #define HSR_EXCEPTION_CLASS(hsr)    (((hsr) & HSR_EXCEPTION_CLASS_MASK) >> HSR_EXCEPTION_CLASS_SHIFT)
 
+#if defined(CONFIG_ARCH_AARCH64)
 static bool handle_unknown_syscall(sel4cp_msginfo msginfo)
 {
     // @ivanv: should print out the name of the VM the fault came from.
@@ -150,15 +157,18 @@ static bool handle_vm_fault()
         }
     }
 }
+#endif
 
 #define SGI_RESCHEDULE_IRQ  0
 #define SGI_FUNC_CALL       1
 #define PPI_VTIMER_IRQ      27
 
+#if defined(CONFIG_ARCH_AARCH64)
 static void vppi_event_ack(uint64_t vcpu_id, int irq, void *cookie)
 {
     sel4cp_arm_vcpu_ack_vppi(VM_ID, irq);
 }
+#endif
 
 static void sgi_ack(uint64_t vcpu_id, int irq, void *cookie) {}
 
@@ -292,6 +302,7 @@ bool guest_restart(void) {
         return false;
     }
     // Reset registers
+#if defined(CONFIG_ARCH_AARCH64)
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_SCTLR, 0);
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_TTBR0, 0);
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_TTBR1, 0);
@@ -324,6 +335,7 @@ bool guest_restart(void) {
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_CNTV_CVAL, 0);
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_CNTVOFF, 0);
     sel4cp_arm_vcpu_write_reg(VM_ID, seL4_VCPUReg_CNTKCTL_EL1, 0);
+#endif
     // Now we need to re-initialise all the VMM state
     guest_start();
     LOG_VMM("Restarted guest\n");
@@ -371,6 +383,7 @@ fault(sel4cp_vm vm, sel4cp_msginfo msginfo)
     uint64_t label = sel4cp_msginfo_get_label(msginfo);
     bool success = false;
     switch (label) {
+#if defined(CONFIG_ARCH_AARCH64)
         case seL4_Fault_VMFault:
             success = handle_vm_fault();
             break;
@@ -389,6 +402,7 @@ fault(sel4cp_vm vm, sel4cp_msginfo msginfo)
         case seL4_Fault_VPPIEvent:
             success = handle_vppi_event();
             break;
+#endif
         default:
             LOG_VMM_ERR("unknown fault, stopping VM %d\n", vm);
             sel4cp_vm_stop(vm);
