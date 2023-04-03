@@ -29,11 +29,9 @@ endif
 # @ivanv: check that all dependencies exist
 SHELL=/bin/bash
 QEMU := qemu-system-aarch64
-TOOLCHAIN := aarch64-linux-gnu
+AARCH64_TOOLCHAIN := aarch64-linux-gnu
+RISCV_TOOLCHAIN := riscv64-linux-gnu
 DTC := dtc
-CC := $(TOOLCHAIN)-gcc
-LD := $(TOOLCHAIN)-ld
-AS := $(TOOLCHAIN)-as
 SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 
 # ARCH := aarch64
@@ -59,11 +57,11 @@ AARCH64_OBJS := psci.o smc.o fault.o vgic.o
 
 # @ivanv: hack...
 # This step should be done based on the DTB
-ifeq ($(SEL4CP_BOARD),imx8mm_evk)
-	VMM_OBJS += vgic_v3.o
-else
-	VMM_OBJS += vgic_v2.o
-endif
+# ifeq ($(SEL4CP_BOARD),imx8mm_evk)
+# 	VMM_OBJS += vgic_v3.o
+# else
+# 	VMM_OBJS += vgic_v2.o
+# endif
 
 # @ivanv: need to have a step for putting in the initrd node into the DTB,
 # 		  right now it is unfortunately hard-coded.
@@ -88,25 +86,32 @@ IMAGES := $(LINUX_IMAGES) vmm.elf
 
 # @ivanv: compiling with -O3, the compiler complains about missing memset
 CFLAGS := -mstrict-align -nostdlib -ffreestanding -g3 -Wall -Wno-unused-function -Werror -I$(SEL4CP_BOARD_DIR)/include -DBOARD_$(SEL4CP_BOARD) -DARCH_$(ARCH) -DCONFIG_$(SEL4CP_CONFIG)
-ifeq ($(ARCH),aarch64)
-	CFLAGS +=  -mcpu=$(CPU)
-endif
 LDFLAGS := -L$(SEL4CP_BOARD_DIR)/lib
 LIBS := -lsel4cp -Tsel4cp.ld
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
-OPENSBI_PAYLOAD = $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
+OPENSBI_PAYLOAD := $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
 
 ifeq ($(ARCH),aarch64)
-	FINAL_IMAGE = $(IMAGE_FILE)
 	VMM_OBJS += $(AARCH64_OBJS)
+	FINAL_IMAGE = $(IMAGE_FILE)
+	TOOLCHAIN := $(AARCH64_TOOLCHAIN)
+	CFLAGS +=  -mcpu=$(CPU) -DPRINTF_DISABLE_SUPPORT_FLOAT
+	ASM_FLAGS := -mcpu=$(CPU)
 else
-	FINAL_IMAGE = $(OPENSBI_PAYLOAD)
+	FINAL_IMAGE := $(OPENSBI_PAYLOAD)
+	TOOLCHAIN := $(RISCV_TOOLCHAIN)
+	CFLAGS += -march=rv64imac -mabi=lp64 -mcmodel=medany -DPRINTF_DISABLE_SUPPORT_FLOAT
+	ASM_FLAGS += -march=rv64imac -mabi=lp64
 endif
 
+CC := $(TOOLCHAIN)-gcc
+LD := $(TOOLCHAIN)-ld
+AS := $(TOOLCHAIN)-as
+
 # @ivanv: incremental building with the IMAGE_DIR set does not work.
-all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(IMAGE_FILE) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(FINAL_IMAGE)
+all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(OPENSBI_PAYLOAD)
 
 directories:
 	$(shell mkdir -p $(BUILD_DIR))
@@ -126,7 +131,7 @@ $(BUILD_DIR)/$(DTB_IMAGE): $(DTB_SOURCE)
 	$(DTC) -q -I dts -O dtb $< > $@
 
 $(BUILD_DIR)/global_data.o: $(SRC_DIR)/global_data.S
-	$(CC) -c -g3 -x assembler-with-cpp -mcpu=$(CPU) \
+	$(CC) -c -g3 -x assembler-with-cpp $(ASM_FLAGS) \
 					-DVM_KERNEL_IMAGE_PATH=\"$(KERNEL_IMAGE)\" \
 					-DVM_DTB_IMAGE_PATH=\"$(BUILD_DIR)/linux.dtb\" \
 					-DVM_INITRD_IMAGE_PATH=\"$(INITRD_IMAGE)\" \
@@ -138,8 +143,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c Makefile
 $(BUILD_DIR)/%.o: $(SRC_DIR)/util/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/vgic/%.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
+# $(BUILD_DIR)/%.o: $(SRC_DIR)/vgic/%.c Makefile
+# 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -148,5 +153,5 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) $(SYSTEM_DES
 	$(SEL4CP_TOOL) $(SYSTEM_DESCRIPTION) --search-path $(BUILD_DIR) $(IMAGE_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 $(OPENSBI_PAYLOAD): $(IMAGE_FILE)
-	make -C $(OPENSBI) -j12 PLATFORM=generic CROSS_COMPILE=riscv64-unknown-elf- FW_PAYLOAD_PATH=$(IMAGE_FILE) FW_PAYLOAD_OFFSET=0x400000 \
-	PLATFORM_RISCV_XLEN=64 PLATFORM_RISCV_ISA=rv64imac PLATFORM_RISCV_ABI=lp64 O=$(BUILD_DIR)
+	make -B -C $(OPENSBI) -j12 PLATFORM=generic CROSS_COMPILE=$(TOOLCHAIN)- FW_PAYLOAD_PATH=../$(IMAGE_FILE) FW_PAYLOAD_OFFSET=0x400000 \
+	PLATFORM_RISCV_XLEN=64 PLATFORM_RISCV_ISA=rv64imac PLATFORM_RISCV_ABI=lp64 O=../$(BUILD_DIR)

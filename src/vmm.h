@@ -26,6 +26,10 @@
 #define GUEST_DTB_VADDR 0x4f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
 #define GUEST_RAM_SIZE 0x10000000
+#elif defined(BOARD_qemu_riscv_virt_hyp)
+#define GUEST_DTB_VADDR 0x8f000000
+#define GUEST_INIT_RAM_DISK_VADDR 0x8d700000
+#define GUEST_RAM_SIZE 0x10000000
 #else
 #error Need to define VM image address and DTB address
 #endif
@@ -42,6 +46,9 @@
 #elif defined(BOARD_imx8mm_evk_hyp)
 #define SERIAL_IRQ_CH 1
 #define SERIAL_IRQ 79
+#elif defined(BOARD_qemu_riscv_virt_hyp)
+#define SERIAL_IRQ_CH 1
+#define SERIAL_IRQ 10
 #else
 #error Need to define serial interrupt
 #endif

@@ -196,8 +196,7 @@ static void assert_fail(
     unsigned int line,
     const char  *function)
 {
-    printf("Failed assertion '");
-    printf(assertion);
+    printf("Failed assertion '%s'", assertion);
     printf("' at ");
     printf(file);
     printf(":");
