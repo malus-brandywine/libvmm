@@ -41,14 +41,6 @@ SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 #     ARCH = riscv64
 # endif
 
-# ifeq ($(ARCH),riscv64)
-# 	ifeq ($(strip $(OPENSBI)),)
-# 	$(error Path to OPENSBI source must be specified)
-# 	endif
-# endif
-
-OPENSBI := opensbi
-
 CPU := cortex-a53
 
 VMM_OBJS := vmm.o printf.o util.o global_data.o
@@ -95,12 +87,10 @@ OPENSBI_PAYLOAD := $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
 
 ifeq ($(ARCH),aarch64)
 	VMM_OBJS += $(AARCH64_OBJS)
-	FINAL_IMAGE = $(IMAGE_FILE)
 	TOOLCHAIN := $(AARCH64_TOOLCHAIN)
 	CFLAGS +=  -mcpu=$(CPU) -DPRINTF_DISABLE_SUPPORT_FLOAT
 	ASM_FLAGS := -mcpu=$(CPU)
 else
-	FINAL_IMAGE := $(OPENSBI_PAYLOAD)
 	TOOLCHAIN := $(RISCV_TOOLCHAIN)
 	CFLAGS += -march=rv64imac -mabi=lp64 -mcmodel=medany -DPRINTF_DISABLE_SUPPORT_FLOAT
 	ASM_FLAGS += -march=rv64imac -mabi=lp64
@@ -111,12 +101,12 @@ LD := $(TOOLCHAIN)-ld
 AS := $(TOOLCHAIN)-as
 
 # @ivanv: incremental building with the IMAGE_DIR set does not work.
-all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(OPENSBI_PAYLOAD)
+all: directories $(BUILD_DIR)/$(DTB_IMAGE) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(IMAGE_FILE)
 
 directories:
 	$(shell mkdir -p $(BUILD_DIR))
 
-run: directories $(BUILD_DIR)/$(DTB_IMAGE) $(IMAGE_FILE)
+run: all $(IMAGE_FILE)
 	# @ivanv: check that the amount of RAM given to QEMU is at least the number of RAM that QEMU is setup with for seL4.
 	$(QEMU) -machine virt,virtualization=on,highmem=off,secure=off \
 			-cpu $(CPU) \
@@ -151,7 +141,3 @@ $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) $(SYSTEM_DESCRIPTION)
 	$(SEL4CP_TOOL) $(SYSTEM_DESCRIPTION) --search-path $(BUILD_DIR) $(IMAGE_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
-
-$(OPENSBI_PAYLOAD): $(IMAGE_FILE)
-	make -B -C $(OPENSBI) -j12 PLATFORM=generic CROSS_COMPILE=$(TOOLCHAIN)- FW_PAYLOAD_PATH=../$(IMAGE_FILE) FW_PAYLOAD_OFFSET=0x2000000 \
-	PLATFORM_RISCV_XLEN=64 PLATFORM_RISCV_ISA=rv64imac PLATFORM_RISCV_ABI=lp64 O=../$(BUILD_DIR)
