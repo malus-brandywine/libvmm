@@ -83,7 +83,6 @@ LIBS := -lsel4cp -Tsel4cp.ld
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
-OPENSBI_PAYLOAD := $(BUILD_DIR)/platform/generic/firmware/fw_payload.elf
 
 ifeq ($(ARCH),aarch64)
 	VMM_OBJS += $(AARCH64_OBJS)
