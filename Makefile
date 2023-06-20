@@ -90,7 +90,7 @@ REPORT_FILE = $(BUILD_DIR)/report.txt
 # FIXME: We should also consider whether -mgeneral-regs-only should be
 # used to avoid the use of the FPU and therefore seL4 does not have to
 # context switch the FPU.
-CFLAGS := -mstrict-align -nostdlib -ffreestanding -g3 -O3 -Wall -Wno-unused-function -Werror -I$(BOARD_DIR)/include -DBOARD_$(BOARD) -DCONFIG_$(CONFIG)
+CFLAGS := -mstrict-align -nostdlib -ffreestanding -g3 -O3 -Wall -Wno-unused-function -Werror -I$(BOARD_DIR)/include -DBOARD_$(BOARD) -DCONFIG_$(CONFIG) -DGUEST_NUM_VCPUS=2
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lsel4cp -Tsel4cp.ld
 

@@ -397,14 +397,14 @@ static bool vgic_dist_reg_read(uint64_t vcpu_id, vgic_t *vgic, uint64_t offset, 
     default:
         LOG_VMM_ERR("Unknown register offset 0x%x", offset);
         // err = ignore_fault(fault);
-        success = fault_advance_vcpu(regs);
+        success = fault_advance_vcpu(regs, vcpu_id);
         assert(success);
         goto fault_return;
     }
     uint32_t mask = fault_get_data_mask(GIC_DIST_PADDR + offset, fsr);
     // fault_set_data(fault, reg & mask);
     // @ivanv: interesting, when we don't call fault_Set_data in the CAmkES VMM, everything works fine?...
-    success = fault_advance(regs, GIC_DIST_PADDR + offset, fsr, reg & mask);
+    success = fault_advance(regs, vcpu_id, GIC_DIST_PADDR + offset, fsr, reg & mask);
     assert(success);
 
 fault_return:
@@ -578,8 +578,6 @@ static bool vgic_dist_reg_write(uint64_t vcpu_id, vgic_t *vgic, uint64_t offset,
             LOG_VMM_ERR("Unknown SGIR Target List Filter mode");
             goto ignore_fault;
         }
-        // @ivanv: Here we're making the assumption that there's only one vCPU, and
-        // we're also blindly injectnig the given IRQ to that vCPU.
         // @ivanv: come back to this, do we have two writes to the TCB registers?
         success = vgic_inject_irq(vcpu_id, virq);
         assert(success);
@@ -616,7 +614,7 @@ ignore_fault:
         return false;
     }
 
-    success = fault_advance_vcpu(regs);
+    success = fault_advance_vcpu(regs, vcpu_id);
     assert(success);
 
     return success;

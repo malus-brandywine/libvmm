@@ -208,7 +208,7 @@ static inline bool vgic_vcpu_load_list_reg(vgic_t *vgic, uint64_t vcpu_id, int i
     assert(vgic_vcpu);
     assert((idx >= 0) && (idx < ARRAY_SIZE(vgic_vcpu->lr_shadow)));
     // @ivanv: why is the priority 0?
-    sel4cp_arm_vcpu_inject_irq(GUEST_ID, virq->virq, 0, group, idx);
+    sel4cp_arm_vcpu_inject_irq(vcpu_id, virq->virq, 0, group, idx);
     vgic_vcpu->lr_shadow[idx] = *virq;
 
     return true;

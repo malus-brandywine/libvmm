@@ -8,8 +8,8 @@
 #include <stdint.h>
 #include <sel4cp.h>
 
-bool fault_advance_vcpu(seL4_UserContext *regs);
-bool fault_advance(seL4_UserContext *regs, uint64_t addr, uint64_t fsr, uint64_t reg_val);
+bool fault_advance_vcpu(seL4_UserContext *regs, uint64_t vcpu_id);
+bool fault_advance(seL4_UserContext *regs, uint64_t vcpu_id, uint64_t addr, uint64_t fsr, uint64_t reg_val);
 uint64_t fault_get_data_mask(uint64_t addr, uint64_t fsr);
 uint64_t fault_get_data(seL4_UserContext *regs, uint64_t fsr);
 uint64_t fault_emulate(seL4_UserContext *regs, uint64_t reg, uint64_t addr, uint64_t fsr, uint64_t reg_val);

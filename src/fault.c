@@ -18,11 +18,11 @@
 //     return !CPSR_IS_THUMB(regs->spsr);
 // }
 
-bool fault_advance_vcpu(seL4_UserContext *regs) {
+bool fault_advance_vcpu(seL4_UserContext *regs, uint64_t vcpu_id) {
     // For now we just ignore it and continue
     // Assume 64-bit instruction
     regs->pc += 4;
-    int err = seL4_TCB_WriteRegisters(BASE_VM_TCB_CAP + GUEST_ID, true, 0, SEL4_USER_CONTEXT_SIZE, regs);
+    int err = seL4_TCB_WriteRegisters(BASE_VM_TCB_CAP + vcpu_id, true, 0, SEL4_USER_CONTEXT_SIZE, regs);
     assert(err == seL4_NoError);
 
     return (err == seL4_NoError);
@@ -193,7 +193,7 @@ uint64_t fault_emulate(seL4_UserContext *regs, uint64_t reg, uint64_t addr, uint
     }
 }
 
-bool fault_advance(seL4_UserContext *regs, uint64_t addr, uint64_t fsr, uint64_t reg_val)
+bool fault_advance(seL4_UserContext *regs, uint64_t vcpu_id, uint64_t addr, uint64_t fsr, uint64_t reg_val)
 {
     /* Get register opearand */
     int rt = get_rt(fsr);
@@ -203,5 +203,5 @@ bool fault_advance(seL4_UserContext *regs, uint64_t addr, uint64_t fsr, uint64_t
     // DFAULT("%s: Emulate fault @ 0x%x from PC 0x%x\n",
     //        fault->vcpu->vm->vm_name, fault->addr, fault->ip);
 
-    return fault_advance_vcpu(regs);
+    return fault_advance_vcpu(regs, vcpu_id);
 }

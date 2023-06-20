@@ -55,7 +55,7 @@ static bool handle_unknown_syscall(sel4cp_msginfo msginfo, uint64_t vcpu_id)
     seL4_Error err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(!err);
 
-    return fault_advance_vcpu(&regs);
+    return fault_advance_vcpu(&regs, vcpu_id);
 }
 
 static bool handle_vppi_event(uint64_t vcpu_id)
@@ -205,20 +205,24 @@ void guest_start(void) {
 #else
 #error "Unsupported GIC version"
 #endif
-    bool err = vgic_register_irq(GUEST_VCPU_ID, PPI_VTIMER_IRQ, &vppi_event_ack, NULL);
-    if (!err) {
-        LOG_VMM_ERR("Failed to register vCPU virtual timer IRQ: 0x%lx\n", PPI_VTIMER_IRQ);
-        return;
-    }
-    err = vgic_register_irq(GUEST_VCPU_ID, SGI_RESCHEDULE_IRQ, &sgi_ack, NULL);
-    if (!err) {
-        LOG_VMM_ERR("Failed to register vCPU SGI 0 IRQ");
-        return;
-    }
-    err = vgic_register_irq(GUEST_VCPU_ID, SGI_FUNC_CALL, &sgi_ack, NULL);
-    if (!err) {
-        LOG_VMM_ERR("Failed to register vCPU SGI 1 IRQ");
-        return;
+
+    bool err = true;
+    for (int i = 0; i < GUEST_NUM_VCPUS; i++) {
+        err = vgic_register_irq(i, PPI_VTIMER_IRQ, &vppi_event_ack, NULL);
+        if (!err) {
+            LOG_VMM_ERR("Failed to register vCPU virtual timer IRQ: 0x%lx\n", PPI_VTIMER_IRQ);
+            return;
+        }
+        err = vgic_register_irq(i, SGI_RESCHEDULE_IRQ, &sgi_ack, NULL);
+        if (!err) {
+            LOG_VMM_ERR("Failed to register vCPU SGI 0 IRQ");
+            return;
+        }
+        err = vgic_register_irq(i, SGI_FUNC_CALL, &sgi_ack, NULL);
+        if (!err) {
+            LOG_VMM_ERR("Failed to register vCPU SGI 1 IRQ");
+            return;
+        }
     }
     // @ivanv: Note that remove this line causes the VMM to fault if we
     // actually get the interrupt. This should be avoided by making the VGIC driver more stable.

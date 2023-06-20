@@ -14,7 +14,10 @@
 // @ivanv: these are here for convience, should not be here though
 #define GUEST_ID 0
 #define GUEST_VCPU_ID 0
+
+#ifndef GUEST_NUM_VCPUS
 #define GUEST_NUM_VCPUS 1
+#endif
 // Note that this is AArch64 specific
 #if defined(CONFIG_ARCH_AARCH64)
     #define SEL4_USER_CONTEXT_SIZE 0x24

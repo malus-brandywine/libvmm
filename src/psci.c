@@ -12,6 +12,8 @@
 #include "util/util.h"
 #include "vmm.h"
 
+bool secondary_vcpus_on[GUEST_NUM_VCPUS - 1];
+
 bool handle_psci(uint64_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uint32_t hsr)
 {
     // @ivanv: write a note about what convention we assume, should we be checking
@@ -24,13 +26,45 @@ bool handle_psci(uint64_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, u
             break;
         }
         case PSCI_CPU_ON: {
-            uintptr_t target_cpu = smc_get_arg(regs, 1);
+            uintptr_t target_vcpu = smc_get_arg(regs, 1);
             // Right now we only have one vCPU and so any fault for a target vCPU
             // that isn't the one that's already on we consider an error on the
             // guest's side.
             // @ivanv: adapt for starting other vCPUs
-            if (target_cpu == vcpu_id) {
-                smc_set_return_value(regs, PSCI_ALREADY_ON);
+            if (target_vcpu < GUEST_NUM_VCPUS && target_vcpu >= 0) {
+                /* The guest has given a valid target vCPU */
+                if (secondary_vcpus_on[target_vcpu]) {
+                    smc_set_return_value(regs, PSCI_ALREADY_ON);
+                } else {
+                    /* We have a valid target vCPU, that is not started yet. So let's turn it on. */
+                    uintptr_t vcpu_entry_point = smc_get_arg(regs, 2);
+                    // @SMP: double check the this type is correct
+                    size_t context_id = smc_get_arg(regs, 2);
+
+                    // @SMP: explain
+                    seL4_UserContext regs = {0};
+                    regs.x0 = context_id;
+                    regs.spsr = 5; // PMODE_EL1h
+                    regs.pc = vcpu_entry_point;
+
+                    seL4_Error err = seL4_TCB_WriteRegisters(
+                        BASE_VM_TCB_CAP + target_vcpu,
+                        false, // We'll explcitly start the guest below rather than in this call
+                        0, // No flags
+                        SEL4_USER_CONTEXT_SIZE,
+                        &regs
+                    );
+                    assert(err == seL4_NoError);
+                    if (err != seL4_NoError) {
+                        return err;
+                    }
+
+                    /* Now that we have started the vCPU, we can set is as turned on. */
+                    secondary_vcpus_on[target_vcpu] = true;
+
+                    LOG_VMM("starting guest vCPU (0x%lx) with entry point 0x%lx\n", target_vcpu, regs.pc);
+                    sel4cp_vm_restart(target_vcpu, regs.pc);
+                }
             } else {
                 // The guest has requested to turn on a virtual CPU that does
                 // not exist.
@@ -77,7 +111,7 @@ bool handle_psci(uint64_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, u
             return false;
     }
 
-    bool success = fault_advance_vcpu(regs);
+    bool success = fault_advance_vcpu(regs, vcpu_id);
     assert(success);
 
     return success;
