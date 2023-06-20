@@ -30,7 +30,7 @@ uintptr_t guest_ram_vaddr;
 #define SYSCALL_PA_TO_IPA 65
 #define SYSCALL_NOP 67
 
-static bool handle_unknown_syscall(sel4cp_msginfo msginfo)
+static bool handle_unknown_syscall(sel4cp_msginfo msginfo, uint64_t vcpu_id)
 {
     // @ivanv: should print out the name of the VM the fault came from.
     uint64_t syscall = sel4cp_mr_get(seL4_UnknownSyscall_Syscall);
@@ -52,25 +52,23 @@ static bool handle_unknown_syscall(sel4cp_msginfo msginfo)
     }
 
     seL4_UserContext regs;
-    seL4_Error err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + GUEST_ID, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    seL4_Error err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(!err);
 
     return fault_advance_vcpu(&regs);
 }
 
-static bool handle_vppi_event()
+static bool handle_vppi_event(uint64_t vcpu_id)
 {
     uint64_t ppi_irq = sel4cp_mr_get(seL4_VPPIEvent_IRQ);
     // We directly inject the interrupt assuming it has been previously registered.
     // If not the interrupt will dropped by the VM.
-    bool success = vgic_inject_irq(GUEST_VCPU_ID, ppi_irq);
+    bool success = vgic_inject_irq(vcpu_id, ppi_irq);
     if (!success) {
         // @ivanv, make a note that when having a lot of printing on it can cause this error
-        LOG_VMM_ERR("VPPI IRQ %lu dropped on vCPU %d\n", ppi_irq, GUEST_VCPU_ID);
+        LOG_VMM_ERR("VPPI IRQ %lu dropped on vCPU %d\n", ppi_irq, vcpu_id);
         // Acknowledge to unmask it as our guest will not use the interrupt
-        // @ivanv: We're going to assume that we only have one VCPU and that the
-        // cap is the base one.
-        sel4cp_arm_vcpu_ack_vppi(GUEST_ID, ppi_irq);
+        sel4cp_arm_vcpu_ack_vppi(vcpu_id, ppi_irq);
     }
 
     return true;
@@ -92,18 +90,18 @@ static bool handle_vcpu_fault(sel4cp_msginfo msginfo, uint64_t vcpu_id)
     }
 }
 
-static int handle_user_exception(sel4cp_msginfo msginfo)
+static int handle_user_exception(sel4cp_msginfo msginfo, uint64_t vcpu_id)
 {
     // @ivanv: print out VM name/vCPU id when we have multiple VMs
     uint64_t fault_ip = sel4cp_mr_get(seL4_UserException_FaultIP);
     uint64_t number = sel4cp_mr_get(seL4_UserException_Number);
-    LOG_VMM_ERR("Invalid instruction fault at IP: 0x%lx, number: 0x%lx", fault_ip, number);
+    LOG_VMM_ERR("Invalid instruction fault from vCPU %d at IP: 0x%lx, number: 0x%lx", fault_ip, number, vcpu_id);
 
     // Dump registers
     seL4_UserContext regs = {0};
-    seL4_Error ret = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + GUEST_ID, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    seL4_Error ret = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     if (ret != seL4_NoError) {
-        printf("Failure reading regs, error %d", ret);
+        printf("Failure reading registers for vCPU %d, error %d", vcpu_id, ret);
         return false;
     } else {
         print_tcb_regs(&regs);
@@ -112,23 +110,23 @@ static int handle_user_exception(sel4cp_msginfo msginfo)
     return true;
 }
 
-static bool handle_vm_fault()
+static bool handle_vm_fault(uint64_t vcpu_id)
 {
     uint64_t addr = sel4cp_mr_get(seL4_VMFault_Addr);
     uint64_t fsr = sel4cp_mr_get(seL4_VMFault_FSR);
 
     seL4_UserContext regs;
-    int err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + GUEST_ID, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    int err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
 
     uint64_t addr_page_aligned = addr & (~(0x1000 - 1));
     switch (addr_page_aligned) {
         case GIC_DIST_PADDR...GIC_DIST_PADDR + GIC_DIST_SIZE:
-            return handle_vgic_dist_fault(GUEST_VCPU_ID, addr, fsr, &regs);
+            return handle_vgic_dist_fault(vcpu_id, addr, fsr, &regs);
 #if defined(GIC_V3)
         /* Need to handle redistributor faults for GICv3 platforms. */
         case GIC_REDIST_PADDR...GIC_REDIST_PADDR + GIC_REDIST_SIZE:
-            return handle_vgic_redist_fault(GUEST_VCPU_ID, addr, fsr, &regs);
+            return handle_vgic_redist_fault(vcpu_id, addr, fsr, &regs);
 #endif
         default: {
             uint64_t ip = sel4cp_mr_get(seL4_VMFault_IP);
@@ -136,7 +134,7 @@ static bool handle_vm_fault()
             uint64_t is_write = (fsr & (1 << 6)) != 0;
             LOG_VMM_ERR("unexpected memory fault on address: 0x%lx, FSR: 0x%lx, IP: 0x%lx, is_prefetch: %s, is_write: %s\n", addr, fsr, ip, is_prefetch ? "true" : "false", is_write ? "true" : "false");
             print_tcb_regs(&regs);
-            print_vcpu_regs(GUEST_ID);
+            print_vcpu_regs(vcpu_id);
             return false;
         }
     }
@@ -148,7 +146,7 @@ static bool handle_vm_fault()
 
 static void vppi_event_ack(uint64_t vcpu_id, int irq, void *cookie)
 {
-    sel4cp_arm_vcpu_ack_vppi(GUEST_ID, irq);
+    sel4cp_arm_vcpu_ack_vppi(vcpu_id, irq);
 }
 
 static void sgi_ack(uint64_t vcpu_id, int irq, void *cookie) {}
@@ -197,6 +195,7 @@ bool guest_init_images(void) {
 }
 
 void guest_start(void) {
+    // @SMP
     // Initialise the virtual GIC driver
     vgic_init();
 #if defined(GIC_V2)
@@ -267,12 +266,14 @@ void guest_start(void) {
 #define SCTLR_DEFAULT      SCTLR_EL1_NATIVE
 
 void guest_stop(void) {
+    // @SMP
     LOG_VMM("Stopping guest\n");
     sel4cp_vm_stop(GUEST_ID);
     LOG_VMM("Stopped guest\n");
 }
 
 bool guest_restart(void) {
+    // @SMP
     LOG_VMM("Attempting to restart guest\n");
     // First, stop the guest
     sel4cp_vm_stop(GUEST_ID);
@@ -345,6 +346,7 @@ notified(sel4cp_channel ch)
 {
     switch (ch) {
         case SERIAL_IRQ_CH: {
+            // @SMP
             bool success = vgic_inject_irq(GUEST_VCPU_ID, SERIAL_IRQ);
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
@@ -359,7 +361,8 @@ notified(sel4cp_channel ch)
 void
 fault(sel4cp_id id, sel4cp_msginfo msginfo)
 {
-    if (id != GUEST_ID) {
+    /* We have the IDs for each vCPU 0-indexed. */
+    if (id >= GUEST_NUM_VCPUS) {
         LOG_VMM_ERR("Unexpected faulting PD/VM with id %d\n", id);
         return;
     }
@@ -369,22 +372,22 @@ fault(sel4cp_id id, sel4cp_msginfo msginfo)
     bool success = false;
     switch (label) {
         case seL4_Fault_VMFault:
-            success = handle_vm_fault();
+            success = handle_vm_fault(id);
             break;
         case seL4_Fault_UnknownSyscall:
-            success = handle_unknown_syscall(msginfo);
+            success = handle_unknown_syscall(msginfo, id);
             break;
         case seL4_Fault_UserException:
-            success = handle_user_exception(msginfo);
+            success = handle_user_exception(msginfo, id);
             break;
         case seL4_Fault_VGICMaintenance:
-            success = handle_vgic_maintenance(GUEST_VCPU_ID);
+            success = handle_vgic_maintenance(id);
             break;
         case seL4_Fault_VCPUFault:
-            success = handle_vcpu_fault(msginfo, GUEST_VCPU_ID);
+            success = handle_vcpu_fault(msginfo, id);
             break;
         case seL4_Fault_VPPIEvent:
-            success = handle_vppi_event();
+            success = handle_vppi_event(id);
             break;
         default:
             LOG_VMM_ERR("unknown fault, stopping VM with ID %d\n", id);

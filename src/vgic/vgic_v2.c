@@ -112,14 +112,17 @@ void vgic_init()
     for (int i = 0; i < NUM_SLOTS_SPI_VIRQ; i++) {
         vgic.vspis[i].virq = VIRQ_INVALID;
     }
-    for (int i = 0; i < NUM_VCPU_LOCAL_VIRQS; i++) {
-        vgic.vgic_vcpu[GUEST_VCPU_ID].local_virqs[i].virq = VIRQ_INVALID;
-    }
-    for (int i = 0; i < NUM_LIST_REGS; i++) {
-        vgic.vgic_vcpu[GUEST_VCPU_ID].lr_shadow[i].virq = VIRQ_INVALID;
-    }
-    for (int i = 0; i < MAX_IRQ_QUEUE_LEN; i++) {
-        vgic.vgic_vcpu[GUEST_VCPU_ID].irq_queue.irqs[i] = NULL;
+
+    for (int vcpu = 0; vcpu < GUEST_NUM_VCPUS; vcpu++) {
+        for (int i = 0; i < NUM_VCPU_LOCAL_VIRQS; i++) {
+            vgic.vgic_vcpu[vcpu].local_virqs[i].virq = VIRQ_INVALID;
+        }
+        for (int i = 0; i < NUM_LIST_REGS; i++) {
+            vgic.vgic_vcpu[vcpu].lr_shadow[i].virq = VIRQ_INVALID;
+        }
+        for (int i = 0; i < MAX_IRQ_QUEUE_LEN; i++) {
+            vgic.vgic_vcpu[vcpu].irq_queue.irqs[i] = NULL;
+        }
     }
     for (int i = 0; i < NUM_SLOTS_SPI_VIRQ; i++) {
         vgic.vspis[i].virq = VIRQ_INVALID;
