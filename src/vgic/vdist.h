@@ -181,13 +181,13 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, uint64_t vcpu_id, int irq)
 
     if (virq_data->virq == VIRQ_INVALID || !vgic_dist_is_enabled(dist) || !is_enabled(dist, irq, vcpu_id)) {
         if (virq_data->virq == VIRQ_INVALID) {
-            LOG_DIST("vIRQ data could not be found\n");
+            LOG_VMM_ERR("vIRQ data for vIRQ %d could not be found for vCPU %d\n", irq, vcpu_id);
         }
         if (!vgic_dist_is_enabled(dist)) {
-            LOG_DIST("vGIC distributor is not enabled\n");
+            LOG_VMM_ERR("vGIC distributor is not enabled for vIRQ on vCPU %d\n", irq, vcpu_id);
         }
         if (!is_enabled(dist, irq, vcpu_id)) {
-            LOG_DIST("vIRQ is not enabled\n");
+            LOG_VMM_ERR("vIRQ %d is not enabled on vCPU %d\n", irq, vcpu_id);
         }
         return false;
     }
