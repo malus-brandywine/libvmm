@@ -119,8 +119,7 @@ static bool handle_vm_fault(uint64_t vcpu_id)
     int err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
 
-    uint64_t addr_page_aligned = addr & (~(0x1000 - 1));
-    switch (addr_page_aligned) {
+    switch (addr) {
         case GIC_DIST_PADDR...GIC_DIST_PADDR + GIC_DIST_SIZE:
             return handle_vgic_dist_fault(vcpu_id, addr, fsr, &regs);
 #if defined(GIC_V3)
