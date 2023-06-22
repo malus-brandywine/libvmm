@@ -282,7 +282,7 @@ bool guest_restart(void) {
     sel4cp_vm_stop(GUEST_ID);
     LOG_VMM("Stopped guest\n");
     // Then, we need to clear all of RAM
-    LOG_VMM("Clearing guest RAM\n");
+    LOG_VMM("Clearing guest RAM [0x%lx..0x%lx)\n", guest_ram_vaddr, guest_ram_vaddr + GUEST_RAM_SIZE);
     memset((char *)guest_ram_vaddr, 0, GUEST_RAM_SIZE);
     // Copy back the images into RAM
     bool success = guest_init_images();
@@ -400,7 +400,7 @@ fault(sel4cp_id id, sel4cp_msginfo msginfo)
     }
 
     if (!success) {
-        LOG_VMM_ERR("Failed to handle %s fault\n", fault_to_string(label));
+        LOG_VMM_ERR("Failed to handle %s fault for vCPU(0x%lx)\n", fault_to_string(label), id);
     } else {
         /* Now that we have handled the fault, we reply to it so that the guest can resume execution. */
         reply_to_fault();
