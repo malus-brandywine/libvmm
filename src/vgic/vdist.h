@@ -501,8 +501,8 @@ static bool vgic_dist_reg_write(uint64_t vcpu_id, vgic_t *vgic, uint64_t offset,
             irq = CTZ(data);
             data &= ~(1U << irq);
             irq += (offset - GIC_DIST_ISPENDR0) * 8;
-            // @ivanv: should be checking this and other calls like it succeed
-            vgic_dist_set_pending_irq(vgic, vcpu_id, irq);
+            success = vgic_dist_set_pending_irq(vgic, vcpu_id, irq);
+            assert(success);
         }
         break;
     case RANGE32(GIC_DIST_ICPENDR0, GIC_DIST_ICPENDRN):
