@@ -59,7 +59,7 @@ static void vgic_dist_reset(struct gic_dist_map *gic_dist)
     gic_dist->typer = 0x0000fce7; /* RO */
     gic_dist->iidr = 0x0200043b; /* RO */
 
-    for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
+    for (int i = 0; i < GUEST_NUM_VCPUS; i++) {
         gic_dist->enable_set0[i] = 0x0000ffff; /* 16bit RO */
         gic_dist->enable_clr0[i] = 0x0000ffff; /* 16bit RO */
     }
@@ -83,7 +83,7 @@ static void vgic_dist_reset(struct gic_dist_map *gic_dist)
     gic_dist->config[15]      = 0x55555555;
 
     /* Configure per-processor SGI/PPI target registers */
-    for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
+    for (int i = 0; i < GUEST_NUM_VCPUS; i++) {
         for (int j = 0; j < ARRAY_SIZE(gic_dist->targets0[i]); j++) {
             for (int irq = 0; irq < sizeof(uint32_t); irq++) {
                 gic_dist->targets0[i][j] |= ((1 << i) << (irq * 8));

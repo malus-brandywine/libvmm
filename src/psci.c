@@ -39,7 +39,7 @@ bool handle_psci(uint64_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, u
                     /* We have a valid target vCPU, that is not started yet. So let's turn it on. */
                     uintptr_t vcpu_entry_point = smc_get_arg(regs, 2);
                     // @SMP: double check the this type is correct
-                    size_t context_id = smc_get_arg(regs, 2);
+                    size_t context_id = smc_get_arg(regs, 3);
 
                     // @SMP: explain
                     seL4_UserContext regs = {0};
@@ -62,7 +62,7 @@ bool handle_psci(uint64_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, u
                     /* Now that we have started the vCPU, we can set is as turned on. */
                     secondary_vcpus_on[target_vcpu] = true;
 
-                    LOG_VMM("starting guest vCPU (0x%lx) with entry point 0x%lx\n", target_vcpu, regs.pc);
+                    LOG_VMM("starting guest vCPU (0x%lx) with entry point 0x%lx, context ID: 0x%lx\n", target_vcpu, regs.pc, context_id);
                     sel4cp_vm_restart(target_vcpu, regs.pc);
                 }
             } else {

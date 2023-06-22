@@ -239,7 +239,7 @@ void guest_start(void) {
     regs.pc = kernel_image_vaddr;
     // Set all the TCB registers
     err = seL4_TCB_WriteRegisters(
-        BASE_VM_TCB_CAP + GUEST_ID,
+        BASE_VM_TCB_CAP + GUEST_VCPU_ID,
         false, // We'll explcitly start the guest below rather than in this call
         0, // No flags
         SEL4_USER_CONTEXT_SIZE, // Writing to x0, pc, and spsr // @ivanv: for some reason having the number of registers here does not work... (in this case 2)
@@ -249,7 +249,7 @@ void guest_start(void) {
     // Set the PC to the kernel image's entry point and start the thread.
     LOG_VMM("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
         regs.pc, regs.x0, GUEST_INIT_RAM_DISK_VADDR);
-    sel4cp_vm_restart(GUEST_ID, regs.pc);
+    sel4cp_vm_restart(GUEST_VCPU_ID, regs.pc);
 }
 
 #define SCTLR_EL1_UCI       (1 << 26)     /* Enable EL0 access to DC CVAU, DC CIVAC, DC CVAC,
