@@ -245,6 +245,8 @@ void guest_start(void) {
 
     // Register the IRQ for the passthrough serial
     register_passthrough_irq(SERIAL_IRQ, SERIAL_IRQ_CH);
+    register_passthrough_irq(79, 2);
+    register_passthrough_irq(78, 3);
 
     seL4_UserContext regs = {0};
     regs.x0 = GUEST_DTB_VADDR;

@@ -79,6 +79,7 @@ SYSTEM_DESCRIPTION := board/$(BOARD)/systems/$(SYSTEM)
 IMAGE_DIR := board/$(BOARD)/images
 KERNEL_IMAGE := $(IMAGE_DIR)/linux
 DTS := $(IMAGE_DIR)/linux.dts
+DTB_OVERLAY := $(IMAGE_DIR)/passthrough_overlay.dts
 DTB_IMAGE := $(BUILD_DIR)/linux.dtb
 INITRD_IMAGE := $(IMAGE_DIR)/rootfs.cpio.gz
 IMAGES := vmm.elf
@@ -103,16 +104,21 @@ run: directories $(IMAGE_FILE)
 			-cpu cortex-a53 \
 			-serial mon:stdio \
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-			-m size=2G \
-			-nographic
+			-m size=4G \
+			-nographic \
+			-drive id=disk,file=sel4cp-vmm.img,if=none \
+			-device virtio-blk-device,drive=disk \
+			-netdev tap,id=mynet0,ifname=tap0,script=no,downscript=no \
+			-device virtio-net-device,netdev=mynet0,mac=52:55:00:d1:55:01
 
 directories:
 	$(shell mkdir -p $(BUILD_DIR))
 
-$(DTB_IMAGE): $(DTS)
+$(DTB_IMAGE): $(DTS) $(DTB_OVERLAY)
 	if ! command -v $(DTC) &> /dev/null; then echo "Could not find dependency: Device Tree Compiler (dtc)"; exit 1; fi
+	cat $^ > $(BUILD_DIR)/tem.dts
 	# @ivanv: Shouldn't supress warnings
-	$(DTC) -q -I dts -O dtb $< > $@
+	$(DTC) -q -I dts -O dtb $(BUILD_DIR)/tem.dts > $@
 
 $(BUILD_DIR)/global_data.o: $(SRC_DIR)/global_data.S $(IMAGE_DIR) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(DTB_IMAGE)
 	$(CC) -c -g3 -x assembler-with-cpp \
