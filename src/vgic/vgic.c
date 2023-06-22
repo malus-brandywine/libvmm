@@ -100,8 +100,10 @@ bool vgic_inject_irq(uint64_t vcpu_id, int irq)
 bool handle_vgic_dist_fault(uint64_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
 {
     /* Make sure that the fault address actually lies within the GIC distributor region. */
-    assert(fault_addr >= GIC_DIST_PADDR);
-    assert(fault_addr - GIC_DIST_PADDR < GIC_DIST_SIZE);
+    if (fault_addr - GIC_DIST_PADDR >= GIC_DIST_SIZE || fault_addr < GIC_DIST_PADDR) {
+        LOG_VMM_ERR("vCPU %d attempted to access address 0x%lx which is outside the range of the GIC distributor\n", vcpu_id, fault_addr);
+        return false;
+    }
 
     uint64_t offset = fault_addr - GIC_DIST_PADDR;
     bool success = false;
