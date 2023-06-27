@@ -104,11 +104,9 @@ run: directories $(IMAGE_FILE)
 			-cpu cortex-a53 \
 			-serial mon:stdio \
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-			-m size=4G \
+			-m size=1G \
 			-nographic \
-			-drive id=disk,file=sel4cp-vmm.img,if=none \
-			-device virtio-blk-device,drive=disk \
-			-netdev tap,id=mynet0,ifname=tap0,script=no,downscript=no \
+			-netdev user,id=mynet0 \
 			-device virtio-net-device,netdev=mynet0,mac=52:55:00:d1:55:01
 
 directories:

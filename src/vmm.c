@@ -116,6 +116,9 @@ static int handle_user_exception(sel4cp_msginfo msginfo)
     return true;
 }
 
+#define WORDLE_BUFFER_ADDR 0x50000000
+#define WORDLE_BUFFER_SIZE (5 * sizeof(char))
+
 static bool handle_vm_fault()
 {
     uint64_t addr = sel4cp_mr_get(seL4_VMFault_Addr);
@@ -125,8 +128,16 @@ static bool handle_vm_fault()
     int err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + GUEST_ID, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
 
-    uint64_t addr_page_aligned = addr & (~(0x1000 - 1));
-    switch (addr_page_aligned) {
+    switch (addr) {
+        case WORDLE_BUFFER_ADDR...WORDLE_BUFFER_ADDR + WORDLE_BUFFER_SIZE:
+            size_t character = fault_get_data(&regs, fsr);
+            printf("Writing char %c at address 0x%lx\n", character, addr);
+            if (addr == WORDLE_BUFFER_ADDR + (WORDLE_BUFFER_SIZE - sizeof(char))) {
+                sel4cp_vm_stop(GUEST_ID);
+                return true;
+            } else {
+                return fault_advance_vcpu(&regs);
+            }
         case GIC_DIST_PADDR...GIC_DIST_PADDR + GIC_DIST_SIZE:
             return handle_vgic_dist_fault(GUEST_VCPU_ID, addr, fsr, &regs);
 #if defined(GIC_V3)
@@ -244,9 +255,7 @@ void guest_start(void) {
     }
 
     // Register the IRQ for the passthrough serial
-    register_passthrough_irq(SERIAL_IRQ, SERIAL_IRQ_CH);
     register_passthrough_irq(79, 2);
-    register_passthrough_irq(78, 3);
 
     seL4_UserContext regs = {0};
     regs.x0 = GUEST_DTB_VADDR;
