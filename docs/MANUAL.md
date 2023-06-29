@@ -89,7 +89,7 @@ if someone had a strong desire for the two values to not be coupled.
 
 ### Serial region
 
-The UART device is passed through to the VM so that it can access it without
+The UART device is passed through to the guest so that it can access it without
 trapping into the seL4 kernel/VMM. This is done for performance and simplicity
 so that the VMM does not have to emulate accesses to the UART device. Note that
 this will work since nothing else is concurrently accessing the device.
@@ -149,20 +149,31 @@ that contains all of the files.
 
 #### Implementation notes
 
-Currently, the VMM is expecting there to be three separate images although it
-is possible to package all of these up into one single image, but the default
-Linux kernel configuration does not do this. It would be possible to change the
-VMM to allow this functionality.
+Currently the VMM expects three separate images, the guest kernel image, the
+Device Tree Blob (DTB), and the initial RAM disk. Despite it being possible to
+package all of these into one single image for a guest such as Linux, there has
+currently been no benefit to do this. It would be trivial to change the VMM to
+allow a different combination of guest images. If you need this behaviour, please
+open a GitHub issue or pull request.
 
-The VMM also (for now) does not have the ability to generate a DTB, therefore
-requiring the Device Tree Source at build time.
+The VMM also (for now) does not have the ability to generate a DTB at runtime,
+therefore requiring the Device Tree Source at build time.
 
 ### Generic Interrupt Controller (GIC)
 
-GIC version 2 and 3 are not fully virtualised by the hardware and therefore the
-interrupt controller is partially virtualised in the VMM. Confirm that your
-ARM platform supports either GICv2 or GICv3, as those are the versions that the
-VMM supports.
+On ARM architectures, there is a hardware device called the Generic Interrupt
+Controller (GIC). This device is responsible for managing interrupts between
+the hardware devices (e.g serial or ethernet) and software. Driving this device
+is necessary for any kind of guest operating system.
+
+Version 2, 3, and 4 of the GIC device is not fully virtualised by the hardware.
+This means that the parts that are not virtualised by the hardware must be instead
+emulated by the VMM.
+
+The VMM currently supports GIC version 2 and 3. GIC version 4 is a super-set of
+GIC version so if you see that your platform supports GIC version 4, it should
+still work with the VMM. If your platform does not support the GIC versions listed
+then the GIC emulation will need to be changed before your platform can be supported.
 
 ### Add platform to VMM source code
 
@@ -179,3 +190,73 @@ There are three files that need to be changed:
 As you can probably tell, all this information that needs to be added is known at
 build-time, the plan is to auto-generate these values that the VMM needs to make it
 easier to add platform support (and in general make the VMM less fragile).
+
+### Getting the guest image to boot
+
+Getting your guest image to boot without any issues is most likely going to be
+platform dependent. This part of the manual aims to provide some guidance for
+what to do when your guest image is failing to boot.
+
+#### Virtual memory faults
+
+A very common issue with booting a guest kernel, such as Linux, is that it unexpectedly
+has a virtual memory fault in a location that the VMM was not expecting. In Linux, this
+usually happens as it is starting up drivers for the various devices on the platform and
+the guest does not have access to the location of the device.
+
+There are three options to resolve this.
+1. Give the guest access to the region of memory it is trying to access.
+2. Disable the device in the node for the device in the Device Tree Source.
+3. Configure the guest image without the device driver, so that it does not
+try to access it.
+
+##### Option 1 - give the guest access to the memory
+##### Option 2 - disabling the device in the device tree
+
+Assuming the guest is being passed a device tree and initialising devices
+based on the device tree passed, it is quite simple to disable the device.
+
+Here is an example of how you would change the Device Tree Source to
+disable the PL011 UART node for the QEMU ARM virt platform:
+```diff
+pl011@9000000 {
+    clock-names = "uartclk\0apb_pclk";
+    clocks = <0x8000 0x8000>;
+    interrupts = <0x00 0x01 0x04>;
+    reg = <0x00 0x9000000 0x00 0x1000>;
+    compatible = "arm,pl011\0arm,primecell";
++   status = "disabled";
+};
+```
+
+##### Option 3 - configure the guest without the device driver
+
+We will look at Linux for specific examples of how to configure the device
+drivers it will use.
+
+A default and generic Linux image (for AArch64) can be built with the following
+command:
+```sh
+make ARCH=arm64 CROSS_COMPILE=<CROSS_COMPILER_PREFIX>
+```
+
+This will package in a lot of drivers (and perhaps a lot more than you need)
+as it is a generic image supposed to work on any AArch64 platform. If you
+see that Linux is faulting because it is initialising a particular device,
+look in the menu configuration and try to find the enabled option, and
+disable it.
+
+To open the menuconfig, run:
+```sh
+make ARCH=arm64 menuconfig
+```
+
+If you are compiling for a different architecture, then replace `arm64` with
+your architecture.
+
+If you are unsure or cannot find the configuration option for the device driver,
+first find the node for the device in the Device Tree Source. You will see it
+has a compatible field such as `compatible = "amlogic,meson-gx-uart`.
+
+By searching for the value of the compatible field in the Linux source code,
+you will find the corresponding driver source code.
