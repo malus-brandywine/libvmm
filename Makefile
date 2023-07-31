@@ -85,6 +85,8 @@ IMAGES := vmm.elf
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
 
+TEST_GUEST_PROGRAM = test.c
+
 # Toolchain flags
 # FIXME: For optimisation we should consider providing the flag -mcpu.
 # FIXME: We should also consider whether -mgeneral-regs-only should be
@@ -114,11 +116,22 @@ $(DTB_IMAGE): $(DTS)
 	# @ivanv: Shouldn't supress warnings
 	$(DTC) -q -I dts -O dtb $< > $@
 
-$(BUILD_DIR)/global_data.o: $(SRC_DIR)/global_data.S $(IMAGE_DIR) $(KERNEL_IMAGE) $(INITRD_IMAGE) $(DTB_IMAGE)
+user_program/test: user_program/$(TEST_GUEST_PROGRAM)
+	aarch64-linux-gnu-gcc -static user_program/$(TEST_GUEST_PROGRAM) -o user_program/test
+
+$(BUILD_DIR)/rootfs.cpio.gz: $(INITRD_IMAGE) user_program/test
+	./tools/install_artifacts_rootfs.sh \
+		--gzip \
+		--image=$(INITRD_IMAGE) \
+		--install-file=user_program/test \
+		--output-dir=$(BUILD_DIR) \
+		--output-image-name=rootfs.cpio
+
+$(BUILD_DIR)/global_data.o: $(SRC_DIR)/global_data.S $(IMAGE_DIR) $(KERNEL_IMAGE) $(BUILD_DIR)/rootfs.cpio.gz $(DTB_IMAGE)
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DVM_KERNEL_IMAGE_PATH=\"$(KERNEL_IMAGE)\" \
 					-DVM_DTB_IMAGE_PATH=\"$(DTB_IMAGE)\" \
-					-DVM_INITRD_IMAGE_PATH=\"$(INITRD_IMAGE)\" \
+					-DVM_INITRD_IMAGE_PATH=\"$(BUILD_DIR)/rootfs.cpio.gz\" \
 					$< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c Makefile
