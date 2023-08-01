@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
     int i = 0;
     char ch = getchar();
-    while (ch != EOF && i < length - 1) {
+    while (ch != '\n' && i < length - 1) {
         dataport[i] = ch;
         i++;
 	ch = getchar();
