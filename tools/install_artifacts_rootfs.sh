@@ -35,17 +35,21 @@ gzip_rootfs_cpio() {
 }
 
 unpack_rootfs_cpio() {
-    printf "$(tput setaf 6)$(tput bold)Unpacking rootfs cpio image: $1$(tput sgr0)\n"
-    UNPACK_FILE=$1
+    # printf "$(tput setaf 6)$(tput bold)Unpacking rootfs cpio image: $1$(tput sgr0)\n"
+
+    UNPACK_FILE=`realpath $1`
+    echo "Unpacking from '${UNPACK_FILE}' to '${OUTPUT_DIR}/${OUTPUT_NAME}'"
+
     if [[ "$UNPACK_FILE" = *.gz ]]; then
-        GUNZIP_FILE=${UNPACK_FILE##*/}
-        gunzip -c ${UNPACK_FILE} > ${OUTPUT_DIR}/${GUNZIP_FILE::-3}
-        UNPACK_FILE="../${GUNZIP_FILE%.gz}"
-        printf "$(tput setaf 6)$(tput bold)Unzipped gz image to ${GUNZIP_FILE}$(tput sgr0)\n"
+
+        gunzip -c ${UNPACK_FILE} > ${OUTPUT_DIR}/${OUTPUT_NAME}
+
+        # printf "$(tput setaf 6)$(tput bold)Unzipped gz image to ${GUNZIP_FILE}$(tput sgr0)\n"
     fi
     mkdir -p ${OUTPUT_DIR}/unpack
     pushd ${OUTPUT_DIR}/unpack
-    fakeroot cpio -id --no-preserve-owner --preserve-modification-time < ${UNPACK_FILE} || error_exit "$(tput setaf 1)$(tput bold)Unpacking CPIO failed$(tput sgr0)\n"
+    echo ${UNPACK_FILE} ${PWD}
+    fakeroot cpio -id --no-preserve-owner --preserve-modification-time < ../${OUTPUT_NAME} || error_exit "$(tput setaf 1)$(tput bold)Unpacking CPIO failed$(tput sgr0)\n"
     popd
 }
 
@@ -118,7 +122,7 @@ mkdir -p ${OUTPUT_DIR}
 
 CPIO=${IMAGE}
 
-unpack_rootfs_cpio ${CPIO}
+unpack_rootfs_cpio ${CPIO} ${OUTPUT_NAME}
 buildroot_setup
 repack_rootfs_cpio
 
