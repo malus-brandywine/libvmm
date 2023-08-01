@@ -235,9 +235,12 @@ We will look at Linux for specific examples of how to configure the device
 drivers it will use.
 
 A default and generic Linux image (for AArch64) can be built with the following
-command:
+commands:
 ```sh
-make ARCH=arm64 CROSS_COMPILE=<CROSS_COMPILER_PREFIX>
+# Configure the kernel based on the default architecture config
+make ARCH=arm64 CROSS_COMPILE=<CROSS_COMPILER_PREFIX> defconfig
+# Compile the kernel
+make ARCH=arm64 CROSS_COMPILE=aarch64-none-elf -j<NUM_THREADS>
 ```
 
 This will package in a lot of drivers (and perhaps a lot more than you need)
