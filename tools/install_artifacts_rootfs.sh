@@ -10,6 +10,8 @@
 OUTPUT_NAME=rootfs_out.cpio
 OUTPUT_DIR=out
 
+set -e
+
 # @ivanv: this bit needs to be re-done since it's not consistent with the arguments the script
 # actually checks for
 # instead of --root-install maybe have --install-dir
@@ -54,11 +56,13 @@ unpack_rootfs_cpio() {
 }
 
 repack_rootfs_cpio() {
+    UNPACK_DIR=`realpath ${OUTPUT_DIR}/unpack`
     printf "$(tput setaf 6)$(tput bold)Repacking rootfs cpio image$(tput sgr0)\n"
-    pushd ${OUTPUT_DIR}/unpack
+    pushd ${UNPACK_DIR}
     find . -print0 | fakeroot cpio --null -H newc -o > ../${OUTPUT_NAME}
     printf "$(tput setaf 6)$(tput bold)Cleaning unpack directory: ${OUTPUT_DIR}/unpack$(tput sgr0)\n"
-    rm -r ${OUTPUT_DIR}/unpack
+    cd ..
+    rm -r ${UNPACK_DIR}
     popd
 }
 
