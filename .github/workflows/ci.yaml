@@ -65,7 +65,9 @@ jobs:
           echo "/usr/local/opt/llvm/bin:$PATH" >> $GITHUB_PATH
           ls /usr/local/opt/llvm/bin
       - name: Build and run VMM examples
-        run: ./ci/examples.sh ${PWD}/sel4cp-sdk-1.2.6
+        run: |
+          echo $PATH
+          ./ci/examples.sh ${PWD}/sel4cp-sdk-1.2.6
         shell: bash
       - name: Upload built system images
         uses: actions/upload-artifact@v3
